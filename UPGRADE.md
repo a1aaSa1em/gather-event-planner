@@ -8,7 +8,7 @@ This is a proposed upgrade. It has local unit tests, but Cognito, CloudFormation
 - All events and tasks use a DynamoDB partition derived from the authenticated user's token subject. The API does not accept an owner ID from the browser.
 - Event categories, optional task deadlines, upcoming-event counts and overdue-task counts.
 - Python API tests, JavaScript sign-in and frontend tests, and GitHub Actions CI. The optional frontend deployment workflow uses GitHub OIDC and requires separate AWS setup. It can be triggered manually; automatic deployments on main-branch frontend changes are opt-in.
-- A CloudWatch API 5xx alarm and an account-wide monthly cost budget. Email alerts are configured only if an address is supplied in the `AlarmEmail` parameter; the SNS subscription email must be confirmed. Budget alerts do not stop spending.
+- A CloudWatch API 5xx alarm. Email alerts are configured only if an address is supplied in the `AlarmEmail` parameter; the SNS subscription email must be confirmed. An AWS budget can be configured separately in the AWS console; a budget alert does not stop spending.
 
 ## Existing data and availability
 
@@ -32,7 +32,7 @@ Tests use fakes and do not substitute for AWS integration or real multi-account 
 From the upgraded project directory, with AWS CLI and SAM installed and signed in to the correct account and region:
 
 1. Back up any existing demo data if you want to retain a separate copy. Record the current CloudFormation outputs and a copy of the current frontend. Do not delete the old DynamoDB table.
-2. Run `sam build` and create a change set for the existing `gather-event-planner` stack. Include `CAPABILITY_IAM`; choose a monthly USD budget and, if you want notifications, supply `AlarmEmail` as a parameter. Review the change set, especially that the existing DynamoDB table, S3 bucket and CloudFront distribution are not being replaced or deleted. Stop if they are.
+2. Run `sam build` and create a change set for the existing `gather-event-planner` stack. Include `CAPABILITY_IAM`; if you want API error notifications, supply `AlarmEmail` as a parameter. Review the change set, especially that the existing DynamoDB table, S3 bucket and CloudFront distribution are not being replaced or deleted. Stop if they are.
 3. After the stack update finishes, run `python3 scripts/publish_frontend.py --stack-name gather-event-planner --region eu-north-1`. It reads the public API, Cognito and hosting outputs, writes `frontend/config.js`, syncs the frontend to the website bucket and invalidates CloudFront. The config values are public and contain no AWS credentials.
 4. Confirm any SNS subscription email. Create two test accounts with different emails; check each user can create an event, cannot see the other's event, and cannot access the other's event through the API. Test sign-out, reload and expired sign-in. Only use non-sensitive test data until this is verified.
 

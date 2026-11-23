@@ -38,7 +38,7 @@ The project uses:
 - **Amazon DynamoDB** to store events and checklist tasks.
 - **AWS SAM and CloudFormation** to define and deploy the infrastructure.
 - **Amazon Cognito** for managed sign-in in the proposed upgrade.
-- **CloudWatch and AWS Budgets** for planned error monitoring and cost alerts.
+- **CloudWatch** for planned API error monitoring; an AWS budget can be set up separately.
 
 API Gateway throttling limits requests, and the function role is scoped to the table. The website is an educational demo rather than a production-ready multi-user application; throttling is not authentication and does not guarantee a cost ceiling.
 
