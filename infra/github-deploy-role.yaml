@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Optional GitHub Actions frontend deployment role scoped to this repository and site.
+Parameters:
+  GitHubOidcProviderArn:
+    Type: String
+    Description: ARN of the existing GitHub OIDC provider in this AWS account.
+  GitHubRepository:
+    Type: String
+    Description: GitHub repository in owner/name form.
+  SiteBucket:
+    Type: String
+    Description: Existing Gather website bucket name.
+  DistributionId:
+    Type: String
+    Description: Existing Gather CloudFront distribution ID.
+Resources:
+  FrontendDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubRepository}:ref:refs/heads/main'
+      Policies:
+        - PolicyName: PublishGatherFrontend
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:ListBucket', 's3:GetBucketLocation']
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${SiteBucket}'
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${SiteBucket}/*'
+              - Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${DistributionId}'
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt FrontendDeploymentRole.Arn

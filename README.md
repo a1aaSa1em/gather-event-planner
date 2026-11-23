@@ -1,6 +1,6 @@
 # Gather — serverless event planner
 
-Gather is an event planning website that keeps events and their checklists in one place. You can create an event, add tasks, mark them complete and see your progress. In the live version, events and tasks are stored in AWS, so they remain available when you refresh or open the app in another browser.
+Gather is an event planning website that keeps events and their checklists in one place. This repository contains a locally tested upgrade that has not yet been deployed; the live website still runs the earlier public demo. You can create an event, add tasks, mark them complete and see your progress. In the live version, events and tasks are stored in AWS, so they remain available when you refresh or open the app in another browser.
 
 **[Try the live website](https://d15225beqmqes.cloudfront.net)**
 
@@ -10,10 +10,14 @@ I created Gather to gain practical experience with AWS by deploying a complete w
 
 ## Features
 
+The upgraded source adds private accounts, event categories and task deadlines. These improvements are pending deployment and end-to-end verification.
+
+
 - Create an event with a name, date and optional location.
 - Add tasks to each event and mark them as complete.
 - See checklist progress update as tasks are completed.
 - Access the same saved events and tasks across browsers in the AWS-hosted version.
+- In the proposed upgrade, sign in to a private workspace and see upcoming events and overdue tasks.
 
 The live site is a shared demo with no sign-in. Anyone with its link can view and edit its events and tasks, so please use sample information only.
 
@@ -33,6 +37,8 @@ The project uses:
 - **AWS Lambda** to run the Python backend and handle requests.
 - **Amazon DynamoDB** to store events and checklist tasks.
 - **AWS SAM and CloudFormation** to define and deploy the infrastructure.
+- **Amazon Cognito** for managed sign-in in the proposed upgrade.
+- **CloudWatch and AWS Budgets** for planned error monitoring and cost alerts.
 
 API Gateway throttling limits requests, and the function role is scoped to the table. The website is an educational demo rather than a production-ready multi-user application; throttling is not authentication and does not guarantee a cost ceiling.
 

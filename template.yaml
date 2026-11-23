@@ -1,6 +1,18 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Gather demo event planner with a serverless API and private S3 origin.
+Description: Gather event planner with authenticated accounts and a serverless AWS backend.
+Parameters:
+  AlarmEmail:
+    Type: String
+    Default: ''
+    Description: Optional email for API error and budget alerts; confirm the SNS subscription.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    Description: Monthly account-wide AWS cost budget in US dollars (alerts do not cap spending).
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
 Globals:
   Function:
     Runtime: python3.12
@@ -9,6 +21,8 @@ Globals:
 Resources:
   EventsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
@@ -17,13 +31,55 @@ Resources:
       KeySchema:
         - {AttributeName: pk, KeyType: HASH}
         - {AttributeName: sk, KeyType: RANGE}
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 10
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email]
+      SupportedIdentityProviders: [COGNITO]
+      CallbackURLs:
+        - !Sub 'https://${SiteDistribution.DomainName}/'
+      LogoutURLs:
+        - !Sub 'https://${SiteDistribution.DomainName}/'
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub 'gather-${AWS::AccountId}-${AWS::Region}'
+      UserPoolId: !Ref UserPool
   EventsApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       CorsConfiguration:
         AllowOrigins: ['*']
-        AllowHeaders: ['content-type']
+        AllowHeaders: ['content-type', 'authorization']
         AllowMethods: [GET, POST, PATCH, OPTIONS]
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            IdentitySource: $request.header.Authorization
+            AuthorizationScopes: [openid]
+            JwtConfiguration:
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${UserPool}'
+              audience:
+                - !Ref UserPoolClient
       DefaultRouteSettings:
         ThrottlingBurstLimit: 20
         ThrottlingRateLimit: 10
@@ -36,8 +92,10 @@ Resources:
         Variables:
           TABLE_NAME: !Ref EventsTable
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref EventsTable
+        - Statement:
+            - Effect: Allow
+              Action: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query', 'dynamodb:UpdateItem']
+              Resource: !GetAtt EventsTable.Arn
       Events:
         ListEvents:
           Type: HttpApi
@@ -54,6 +112,63 @@ Resources:
         UpdateTask:
           Type: HttpApi
           Properties: {ApiId: !Ref EventsApi, Path: '/events/{eventId}/tasks/{taskId}', Method: PATCH}
+  ErrorNotifications:
+    Type: AWS::SNS::Topic
+    Condition: HasAlarmEmail
+  ErrorSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+      TopicArn: !Ref ErrorNotifications
+  ApiErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Gather API returned at least one server error in five minutes.
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref EventsApi
+        - Name: Stage
+          Value: '$default'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmEmail, [!Ref ErrorNotifications], !Ref 'AWS::NoValue']
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${AWS::StackName}-account-monthly'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers: !If
+        - HasAlarmEmail
+        - - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 80
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: !Ref AlarmEmail
+          - Notification:
+              NotificationType: FORECASTED
+              ComparisonOperator: GREATER_THAN
+              Threshold: 100
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: !Ref AlarmEmail
+        - !Ref 'AWS::NoValue'
   SiteBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -103,6 +218,12 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}'
 Outputs:
+  CognitoDomain:
+    Value: !Sub 'https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com'
+  CognitoClientId:
+    Value: !Ref UserPoolClient
+  UserPoolId:
+    Value: !Ref UserPool
   ApiUrl:
     Value: !Sub 'https://${EventsApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
   SiteBucketName:

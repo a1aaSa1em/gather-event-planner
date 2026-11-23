@@ -1,0 +1,47 @@
+name: Deploy frontend to AWS
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['frontend/**', '.github/workflows/deploy-frontend.yml']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.GATHER_AUTO_DEPLOY == 'true')
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      SITE_BUCKET: ${{ vars.GATHER_SITE_BUCKET }}
+      DISTRIBUTION_ID: ${{ vars.GATHER_DISTRIBUTION_ID }}
+      GATHER_API_URL: ${{ vars.GATHER_API_URL }}
+      GATHER_AUTH_DOMAIN: ${{ vars.GATHER_AUTH_DOMAIN }}
+      GATHER_CLIENT_ID: ${{ vars.GATHER_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run tests before deployment
+        run: |
+          python -m unittest discover -s tests -v
+          node --test tests/*.test.js
+          node --check frontend/app.js
+          node --check frontend/auth.js
+      - name: Check deployment configuration
+        run: python scripts/write_config.py
+      - name: Obtain short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Publish site and invalidate cache
+        run: |
+          test -n "$SITE_BUCKET" && test -n "$DISTRIBUTION_ID"
+          aws s3 sync frontend/ "s3://$SITE_BUCKET/"
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths '/*'
