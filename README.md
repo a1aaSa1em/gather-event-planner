@@ -1,6 +1,6 @@
 # Gather — serverless event planner
 
-Gather is a small event planning website for creating events, tracking checklists and seeing progress. The project contains a browser-local demo and an AWS backend that stores events and tasks in DynamoDB. AWS deployment is **prepared, not yet performed**.
+Gather is a small event planning website for creating events, tracking checklists and seeing progress. The project contains a browser-local demo and an AWS backend that stores events and tasks in DynamoDB. The AWS deployment is live: [open Gather](https://d15225beqmqes.cloudfront.net). Events and task changes were verified across browsers after deployment.
 
 ## Try the browser demo
 
@@ -14,7 +14,7 @@ Browser ── HTTPS ── CloudFront ── private S3 bucket (website files)
    └── HTTPS ── API Gateway HTTP API ── Lambda (Python) ── DynamoDB
 ```
 
-The SAM template creates a CloudFront distribution and an S3 bucket with public access blocked, a DynamoDB table, an API Gateway HTTP API and a Lambda function. API Gateway throttling limits requests, and the function role is scoped to the table. CloudFront uses origin access control to read from S3. The sample has no sign-in: **once deployed, anyone with the API or website URL can read and modify all events and tasks**. Use only non-sensitive sample information. It is an educational demo, not a production-ready multi-user application; throttling is not authentication and does not guarantee a cost ceiling.
+The SAM template creates a CloudFront distribution and an S3 bucket with public access blocked, a DynamoDB table, an API Gateway HTTP API and a Lambda function. API Gateway throttling limits requests, and the function role is scoped to the table. CloudFront uses origin access control to read from S3. The sample has no sign-in: **anyone with the API or website URL can read and modify all events and tasks**. Use only non-sensitive sample information. It is an educational demo, not a production-ready multi-user application; throttling is not authentication and does not guarantee a cost ceiling.
 
 The list shows up to 50 events; an event shows up to 100 tasks. The API validates input lengths and dates, and uses conditional updates so a missing task is not accidentally created. Items are saved in DynamoDB, so separate browsers see the same deployed data.
 
