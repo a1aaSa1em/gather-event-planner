@@ -1,45 +1,58 @@
-# Gather — serverless event planner
+# Gather — an AWS learning project
 
-Gather is an event planning website that keeps events and their checklists in one place. This repository contains a locally tested upgrade that has not yet been deployed; the live website still runs the earlier public demo. You can create an event, add tasks, mark them complete and see your progress. In the live version, events and tasks are stored in AWS, so they remain available when you refresh or open the app in another browser.
+Gather is a serverless event planning website that brings events and their checklists together. I created it as a personal project to experiment with AWS and gain practical experience of how cloud services connect to support a working web application.
 
-**[Try the live website](https://d15225beqmqes.cloudfront.net)**
+**[Visit Gather](https://d15225beqmqes.cloudfront.net/)**
 
-## Why I built it
+## The idea
 
-I created Gather to gain practical experience with AWS by deploying a complete website and connecting it to a serverless backend. With AI assistance, I developed the project, deployed its infrastructure using AWS SAM and tested that event and task changes persisted across browsers. The project helped me explore how a frontend, API, serverless function and cloud database work together.
+I wanted to go beyond reading about cloud computing and explore what it takes to host and operate an application on AWS. An event planner gave me a practical way to work with a frontend, an API, a database, authentication and monitoring as parts of the same project.
 
-## Features
+With AI assistance, I developed Gather, deployed its infrastructure through AWS SAM and explored the AWS console while testing the application. The project is an ongoing learning exercise and a demonstration of my experience with AWS services.
 
-The upgraded source adds private accounts, event categories and task deadlines. These improvements are pending deployment and end-to-end verification.
+## What the website does
 
+Gather provides a workspace for organising events and the tasks associated with them. Users can:
 
-- Create an event with a name, date and optional location.
-- Add tasks to each event and mark them as complete.
-- See checklist progress update as tasks are completed.
-- Access the same saved events and tasks across browsers in the AWS-hosted version.
-- In the proposed upgrade, sign in to a private workspace and see upcoming events and overdue tasks.
+- Create an account and sign in to their workspace.
+- Create events with details such as a name, date, category and location.
+- Add checklist tasks, set optional deadlines and mark tasks as complete.
+- View event progress, upcoming events and overdue tasks.
+- Return to saved events and tasks after refreshing the website.
 
-The live site is a shared demo with no sign-in. Anyone with its link can view and edit its events and tasks, so please use sample information only.
-
-## Architecture
+## How it works
 
 ```text
-Browser ── HTTPS ── CloudFront ── private S3 bucket (website files)
+                         Amazon Cognito
+                         (user sign-in)
+                               │
+Browser ── HTTPS ── CloudFront ── S3 (website files)
    │
-   └── HTTPS ── API Gateway HTTP API ── Lambda (Python) ── DynamoDB
+   └── HTTPS ── API Gateway ── Lambda (Python) ── DynamoDB
+                     │
+                 CloudWatch
+              (error monitoring)
 ```
 
-The project uses:
+The browser loads the website through CloudFront. After signing in with Cognito, the frontend sends requests to API Gateway, which checks the user's token before passing requests to a Lambda function. The function handles events and tasks and stores data in DynamoDB. CloudWatch monitors the API for server errors.
 
-- **Amazon S3** to store the website files in a bucket that blocks direct public access.
-- **Amazon CloudFront** to serve the website over HTTPS, using origin access control to read from S3.
-- **Amazon API Gateway** to expose HTTP endpoints for events and tasks.
-- **AWS Lambda** to run the Python backend and handle requests.
-- **Amazon DynamoDB** to store events and checklist tasks.
-- **AWS SAM and CloudFormation** to define and deploy the infrastructure.
-- **Amazon Cognito** for managed sign-in in the proposed upgrade.
-- **CloudWatch** for planned API error monitoring; an AWS budget can be set up separately.
+## AWS services explored
 
-API Gateway throttling limits requests, and the function role is scoped to the table. The website is an educational demo rather than a production-ready multi-user application; throttling is not authentication and does not guarantee a cost ceiling.
+- **Amazon S3:** stores the frontend files in a private bucket.
+- **Amazon CloudFront:** delivers the website over HTTPS and accesses the files in S3.
+- **Amazon Cognito:** manages user accounts and sign-in.
+- **Amazon API Gateway:** provides the API endpoints used by the frontend and validates access tokens.
+- **AWS Lambda:** runs the Python backend that handles event and task requests.
+- **Amazon DynamoDB:** stores events and tasks, organised by user.
+- **Amazon CloudWatch:** monitors API Gateway server errors using an alarm. The alarm is visible in the CloudWatch console; email notifications have not been configured for it.
+- **AWS SAM and AWS CloudFormation:** define and deploy the application's cloud infrastructure.
+- **AWS Identity and Access Management (IAM):** controls the permissions used by the application's AWS resources.
+- **AWS Budgets:** provides a separate account-level cost alert, helping me explore cloud cost monitoring. Budget alerts do not automatically stop spending.
 
-The list shows up to 50 events; an event shows up to 100 tasks. The API validates input lengths and dates, and uses conditional updates so a missing task is not accidentally created. Items are saved in DynamoDB, so separate browsers see the same deployed data.
+## What I explored and tested
+
+Deploying Gather helped me understand how a static website can communicate with a serverless backend, how authentication fits into an API, and how application data can persist in a cloud database. I also explored infrastructure as code, AWS permissions, monitoring and cost awareness.
+
+I tested the deployed application by creating an event and checklist task, refreshing the page and checking that the data remained available. I also checked that signing out hid the workspace, that a second account did not display the first account's events, and that an unauthenticated API request returned a `401` response.
+
+Gather is a learning project rather than a production service. These checks are useful demonstrations of its behaviour, but they are not a comprehensive security assessment, so please use sample information.
